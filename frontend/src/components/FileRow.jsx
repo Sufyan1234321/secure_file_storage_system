@@ -31,7 +31,7 @@ export default function FileRow({ file, isAdmin, onVisibilityChange, onShare, on
       <div className="file-info">
         <strong>{file.originalName}</strong>
         <span>
-          {formatSize(file.size)} · {fileDate}
+          {file.folder || 'General'} · {formatSize(file.size)} · {fileDate}
         </span>
       </div>
 

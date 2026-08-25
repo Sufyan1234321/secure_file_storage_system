@@ -16,6 +16,8 @@ export default function Dashboard() {
   const [preview, setPreview] = useState(null);
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [folderFilter, setFolderFilter] = useState('all');
 
   async function loadFiles() {
     const response = await api.get('/files');
@@ -40,12 +42,12 @@ export default function Dashboard() {
       return;
     }
 
-    setPendingUpload(file);
+    setPendingUpload({ file, folder: folders.includes('General') ? 'General' : folders[0] || 'General', isNewFolder: false });
     event.target.value = '';
   }
 
   async function uploadFile(isPublic) {
-    const file = pendingUpload;
+    const file = pendingUpload?.file;
 
     if (!file) {
       return;
@@ -59,6 +61,7 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('isPublic', String(isPublic));
+      formData.append('folder', pendingUpload.folder);
       await api.post('/files/upload', formData, {
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
@@ -76,6 +79,14 @@ export default function Dashboard() {
       setUploadProgress(0);
       setPendingUpload(null);
     }
+  }
+
+  function updatePendingFolder(event) {
+    setPendingUpload((current) => current && {
+      ...current,
+      folder: event.target.value === '__new__' ? '' : event.target.value,
+      isNewFolder: event.target.value === '__new__'
+    });
   }
 
   async function changeVisibility(file) {
@@ -162,17 +173,22 @@ export default function Dashboard() {
   }
 
   function getVisibleFiles() {
-    if (filter === 'public') {
-      return files.filter((file) => file.isPublic);
-    }
+    const normalizedSearch = search.trim().toLowerCase();
 
-    if (filter === 'private') {
-      return files.filter((file) => !file.isPublic);
-    }
+    return files.filter((file) => {
+      const matchesAccess = filter === 'all'
+        || (filter === 'public' && file.isPublic)
+        || (filter === 'private' && !file.isPublic);
+      const matchesFolder = folderFilter === 'all' || (file.folder || 'General') === folderFilter;
+      const matchesSearch = !normalizedSearch
+        || file.originalName.toLowerCase().includes(normalizedSearch)
+        || (file.folder || 'General').toLowerCase().includes(normalizedSearch);
 
-    return files;
+      return matchesAccess && matchesFolder && matchesSearch;
+    });
   }
 
+  const folders = [...new Set(['General', ...files.map((file) => file.folder || 'General')])].sort();
   const visibleFiles = getVisibleFiles();
 
   return (
@@ -207,8 +223,18 @@ export default function Dashboard() {
             <section className="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-choice-title">
               <p className="eyebrow">UPLOAD SETTINGS</p>
               <h2 id="upload-choice-title">Who should access this file?</h2>
-              <p className="upload-modal-file">{pendingUpload.name}</p>
+              <p className="upload-modal-file">{pendingUpload.file.name}</p>
               <p className="upload-modal-help">Choose public to create a shareable link. Choose private to keep access limited to you.</p>
+              <label className="folder-input">
+                Choose a folder
+                <select value={pendingUpload.isNewFolder ? '__new__' : pendingUpload.folder} onChange={updatePendingFolder} disabled={isUploading}>
+                  {folders.map((folder) => <option key={folder} value={folder}>{folder}</option>)}
+                  <option value="__new__">+ Create new folder</option>
+                </select>
+                {pendingUpload.isNewFolder && (
+                  <input value={pendingUpload.folder} onChange={(event) => setPendingUpload((current) => current && { ...current, folder: event.target.value.slice(0, 60) })} maxLength="60" placeholder="Enter a new folder name" disabled={isUploading} autoFocus />
+                )}
+              </label>
               <div className="upload-modal-actions">
                 <button className="modal-private" onClick={() => uploadFile(false)} disabled={isUploading}>
                   Keep private
@@ -238,6 +264,19 @@ export default function Dashboard() {
         )}
 
         <div className="toolbar">
+          <div className="file-filters">
+            <label className="search-box">
+              <span>Search files</span>
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name or folder" />
+            </label>
+            <label className="folder-filter">
+              <span>Folder</span>
+              <select value={folderFilter} onChange={(event) => setFolderFilter(event.target.value)}>
+                <option value="all">All folders</option>
+                {folders.map((folder) => <option key={folder} value={folder}>{folder}</option>)}
+              </select>
+            </label>
+          </div>
           <div className="tabs">
             <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
               All files <b>{files.length}</b>
@@ -249,7 +288,7 @@ export default function Dashboard() {
               Shared
             </button>
           </div>
-          <span className="storage-note">Encrypted metadata · Local storage</span>
+          <span className="storage-note">{visibleFiles.length} result{visibleFiles.length === 1 ? '' : 's'}</span>
         </div>
 
         {visibleFiles.length > 0 ? (
