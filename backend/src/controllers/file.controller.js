@@ -19,9 +19,13 @@ export async function requestUpload(req, res) {
 
   validateUploadName(req.file.originalname);
   const isPublic = req.body.isPublic === 'true';
+  const folder = typeof req.body.folder === 'string' && req.body.folder.trim()
+    ? req.body.folder.trim().slice(0, 60)
+    : 'General';
 
   const file = await File.create({
     originalName: req.file.originalname,
+    folder,
     size: req.file.size,
     mimeType: req.file.mimetype,
     storageName: req.file.filename,

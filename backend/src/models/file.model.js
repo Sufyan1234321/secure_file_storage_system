@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const fileSchema = new mongoose.Schema({
   originalName: { type: String, required: true, trim: true },
+  folder: { type: String, required: true, trim: true, maxlength: 60, default: 'General', index: true },
   storageName: { type: String, required: true, unique: true },
   size: { type: Number, required: true, min: 0 },
   mimeType: { type: String, required: true },
