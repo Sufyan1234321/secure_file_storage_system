@@ -51,7 +51,7 @@ export function AuthLayout({ title, subtitle, children }) {
   return (
     <main className="auth-page">
       <section className="auth-art">
-        <div className="brand-mark">keep<span>.</span></div>
+        <div className="brand-mark">secure file storage<span>.</span></div>
         <div className="art-copy">
           <p className="eyebrow">PRIVATE BY DEFAULT</p>
           <h1>A quieter place<br />for your files.</h1>
