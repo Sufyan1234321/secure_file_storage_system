@@ -1,5 +1,5 @@
 import { validationResult } from 'express-validator';
-import { loginUser, registerUser } from '../services/auth.service.js';
+import { changeUserPassword, loginUser, registerUser } from '../services/auth.service.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 
 function validate(req) {
@@ -40,4 +40,14 @@ export function currentUser(req, res) {
   };
 
   return sendSuccess(res, { user });
+}
+
+export async function changePassword(req, res) {
+  try {
+    validate(req);
+    await changeUserPassword(req.user._id, req.body.currentPassword, req.body.newPassword);
+    return sendSuccess(res, { message: 'Password changed successfully' });
+  } catch (error) {
+    return sendError(res, error.message, error.statusCode || 500);
+  }
 }

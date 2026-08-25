@@ -3,9 +3,12 @@ import {
 	deleteFile,
 	downloadFile,
 	listFiles,
+	listTrash,
 	listUsers,
+	permanentlyDeleteFile,
 	publicDownload,
 	requestUpload,
+	restoreFile,
 	updateFile
 } from '../controllers/file.controller.js';
 import { protect } from '../middleware/auth.middleware.js';
@@ -18,7 +21,10 @@ router.get('/share/:shareToken', publicDownload);
 router.use(protect);
 router.post('/upload', uploadFile, requestUpload);
 router.get('/', listFiles);
+router.get('/trash', listTrash);
 router.get('/users', requireRole('admin'), listUsers);
+router.patch('/:id/restore', restoreFile);
+router.delete('/:id/permanent', permanentlyDeleteFile);
 router.get('/:id/download', downloadFile);
 router.patch('/:id', updateFile);
 router.delete('/:id', deleteFile);
