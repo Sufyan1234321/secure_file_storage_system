@@ -1,7 +1,7 @@
 import File from '../models/file.model.js';
 import User from '../models/user.model.js';
-import { validateUploadName } from '../middleware/upload.middleware.js';
-import { getFilePath, removeStoredFile } from '../services/file.service.js';
+import { validateFolderName, validateUploadName } from '../middleware/upload.middleware.js';
+import { getFilePath, moveStoredFile, removeStoredFile } from '../services/file.service.js';
 import { generateShareToken } from '../utils/generateToken.js';
 import { sendSuccess } from '../utils/response.js';
 
@@ -24,6 +24,7 @@ export async function requestUpload(req, res) {
   const folder = typeof req.body.folder === 'string' && req.body.folder.trim()
     ? req.body.folder.trim().slice(0, 60)
     : 'General';
+  validateFolderName(folder);
   const usedStorage = await File.aggregate([
     { $match: { owner: req.user._id } },
     { $group: { _id: null, total: { $sum: '$size' } } }
@@ -38,12 +39,14 @@ export async function requestUpload(req, res) {
     });
   }
 
+  const storageName = await moveStoredFile(req.file.filename, req.user._id, folder);
+
   const file = await File.create({
     originalName: req.file.originalname,
     folder,
     size: req.file.size,
     mimeType: req.file.mimetype,
-    storageName: req.file.filename,
+    storageName,
     owner: req.user._id,
     isPublic,
     shareToken: isPublic ? generateShareToken() : undefined
@@ -96,7 +99,12 @@ export async function updateFile(req, res) {
     if (typeof req.body.folder !== 'string' || !req.body.folder.trim()) {
       return res.status(422).json({ success: false, message: 'Folder name is required' });
     }
-    file.folder = req.body.folder.trim().slice(0, 60);
+    const folder = req.body.folder.trim().slice(0, 60);
+    validateFolderName(folder);
+    if (folder !== file.folder) {
+      file.storageName = await moveStoredFile(file.storageName, file.owner._id, folder);
+    }
+    file.folder = folder;
   }
   await file.save();
 
