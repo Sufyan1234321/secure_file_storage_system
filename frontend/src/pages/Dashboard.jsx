@@ -16,13 +16,17 @@ function formatStorage(bytes) {
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [files, setFiles] = useState([]);
+  const [folderRecords, setFolderRecords] = useState([]);
   const [trashFiles, setTrashFiles] = useState([]);
   const [users, setUsers] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [pendingUpload, setPendingUpload] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [pendingPermanentDelete, setPendingPermanentDelete] = useState(null);
   const [pendingEdit, setPendingEdit] = useState(null);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
   const [preview, setPreview] = useState(null);
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState('all');
@@ -32,6 +36,8 @@ export default function Dashboard() {
   async function loadFiles() {
     const response = await api.get('/files');
     setFiles(response.data.data.files);
+    const foldersResponse = await api.get('/files/folders');
+    setFolderRecords(foldersResponse.data.data.folders);
 
     if (user.role === 'admin') {
       const usersResponse = await api.get('/files/users');
@@ -112,6 +118,22 @@ export default function Dashboard() {
     });
   }
 
+  async function createFolder() {
+    const name = newFolderName.trim();
+    if (!name) return;
+
+    try {
+      await api.post('/files/folders', { name });
+      setNewFolderName('');
+      setIsCreatingFolder(false);
+      await loadFiles();
+      setFolderFilter(name);
+      setNotice(`Folder "${name}" created`);
+    } catch (error) {
+      setNotice(error.response?.data?.message || 'Could not create folder');
+    }
+  }
+
   async function changeVisibility(file) {
     try {
       await api.patch(`/files/${file._id}`, { isPublic: !file.isPublic });
@@ -136,7 +158,7 @@ export default function Dashboard() {
   }
 
   function moveFile(file) {
-    setPendingEdit({ type: 'move', file, value: file.folder || 'General' });
+    setPendingEdit({ type: 'move', file, value: file.folder || 'General', isNewFolder: false });
   }
 
   async function saveEdit() {
@@ -158,6 +180,14 @@ export default function Dashboard() {
 
     await updateFile(pendingEdit.file, updates);
     setPendingEdit(null);
+  }
+
+  function updateMoveFolder(event) {
+    setPendingEdit((current) => current && {
+      ...current,
+      value: event.target.value === '__new__' ? '' : event.target.value,
+      isNewFolder: event.target.value === '__new__'
+    });
   }
 
   async function shareFile(file) {
@@ -245,12 +275,17 @@ export default function Dashboard() {
   }
 
   async function permanentlyDeleteFile(file) {
-    if (!window.confirm(`Permanently delete ${file.originalName}? This cannot be undone.`)) return;
+    setPendingPermanentDelete(file);
+  }
+
+  async function confirmPermanentDelete() {
+    if (!pendingPermanentDelete) return;
 
     try {
-      await api.delete(`/files/${file._id}/permanent`);
-      setTrashFiles((current) => current.filter((item) => item._id !== file._id));
+      await api.delete(`/files/${pendingPermanentDelete._id}/permanent`);
+      setTrashFiles((current) => current.filter((item) => item._id !== pendingPermanentDelete._id));
       setNotice('File permanently deleted');
+      setPendingPermanentDelete(null);
     } catch (error) {
       setNotice(error.response?.data?.message || 'Could not permanently delete file');
     }
@@ -272,7 +307,7 @@ export default function Dashboard() {
     });
   }
 
-  const folders = [...new Set(['General', ...files.map((file) => file.folder || 'General')])].sort();
+  const folders = [...new Set(['General', ...folderRecords.map((folder) => folder.name), ...files.map((file) => file.folder || 'General')])].sort();
   const usedStorage = files.reduce((total, file) => total + (file.size || 0), 0);
   const storagePercent = Math.min(100, (usedStorage / storageLimit) * 100);
   const visibleFiles = filter === 'trash' ? trashFiles : getVisibleFiles();
@@ -288,15 +323,26 @@ export default function Dashboard() {
               <span aria-hidden="true">▣</span> My files
             </button>
             <button className={filter === 'public' ? 'active' : ''} onClick={() => setFilter('public')}>
-              <span aria-hidden="true">⌯</span> Shared
+              <span aria-hidden="true">⌯</span> Public
             </button>
             <button className={filter === 'private' ? 'active' : ''} onClick={() => setFilter('private')}>
-              <span aria-hidden="true">◌</span> Only me
+              <span aria-hidden="true">◌</span> Private
             </button>
             <button className={filter === 'trash' ? 'active' : ''} onClick={() => setFilter('trash')}>
               <span aria-hidden="true">⌫</span> Trash
             </button>
           </nav>
+          <div className="sidebar-folders">
+            <p className="sidebar-label">FOLDERS</p>
+            <button className="new-folder-button" onClick={() => setIsCreatingFolder(true)}>
+              <span aria-hidden="true">+</span> New folder
+            </button>
+            {folders.map((folder) => (
+              <button className={folderFilter === folder && filter !== 'trash' ? 'active' : ''} key={folder} onClick={() => { setFilter('all'); setFolderFilter(folder); }}>
+                <span aria-hidden="true">▱</span> {folder}
+              </button>
+            ))}
+          </div>
           <section className="storage-summary" aria-label="Storage usage">
             <div className="storage-summary-label">
               <strong>{formatStorage(usedStorage)} used</strong>
@@ -372,6 +418,24 @@ export default function Dashboard() {
                   Cancel upload
                 </button>
               )}
+            </section>
+          </div>
+        )}
+
+        {isCreatingFolder && (
+          <div className="edit-modal-backdrop" role="presentation">
+            <section className="edit-modal" role="dialog" aria-modal="true" aria-labelledby="new-folder-title">
+              <p className="eyebrow">NEW FOLDER</p>
+              <h2 id="new-folder-title">Create a folder</h2>
+              <p className="edit-modal-file">Create it now, then choose it when uploading files.</p>
+              <label className="edit-modal-field">
+                Folder name
+                <input value={newFolderName} onChange={(event) => setNewFolderName(event.target.value.slice(0, 60))} maxLength="60" placeholder="e.g. Work or Personal" autoFocus onKeyDown={(event) => event.key === 'Enter' && createFolder()} />
+              </label>
+              <div className="edit-modal-actions">
+                <button className="modal-cancel" onClick={() => { setIsCreatingFolder(false); setNewFolderName(''); }}>Cancel</button>
+                <button className="modal-public" onClick={createFolder}>Create folder</button>
+              </div>
             </section>
           </div>
         )}
@@ -494,17 +558,44 @@ export default function Dashboard() {
               <p className="edit-modal-file">{pendingEdit.file.originalName}</p>
               <label className="edit-modal-field">
                 {pendingEdit.type === 'rename' ? 'File name' : 'Folder name'}
-                <input
-                  value={pendingEdit.value}
-                  onChange={(event) => setPendingEdit((current) => current && { ...current, value: event.target.value })}
-                  maxLength={pendingEdit.type === 'rename' ? 120 : 60}
-                  autoFocus
-                  onKeyDown={(event) => event.key === 'Enter' && saveEdit()}
-                />
+                {pendingEdit.type === 'move' ? (
+                  <>
+                    <select value={pendingEdit.isNewFolder ? '__new__' : pendingEdit.value} onChange={updateMoveFolder} autoFocus>
+                      {folders.map((folder) => <option key={folder} value={folder}>{folder}</option>)}
+                      <option value="__new__">+ Create new folder</option>
+                    </select>
+                    {pendingEdit.isNewFolder && (
+                      <input value={pendingEdit.value} onChange={(event) => setPendingEdit((current) => current && { ...current, value: event.target.value.slice(0, 60) })} maxLength="60" placeholder="Enter a new folder name" onKeyDown={(event) => event.key === 'Enter' && saveEdit()} />
+                    )}
+                  </>
+                ) : (
+                  <input
+                    value={pendingEdit.value}
+                    onChange={(event) => setPendingEdit((current) => current && { ...current, value: event.target.value })}
+                    maxLength="120"
+                    autoFocus
+                    onKeyDown={(event) => event.key === 'Enter' && saveEdit()}
+                  />
+                )}
               </label>
               <div className="edit-modal-actions">
                 <button className="modal-cancel" onClick={() => setPendingEdit(null)}>Cancel</button>
                 <button className="modal-public" onClick={saveEdit}>Save changes</button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {pendingPermanentDelete && (
+          <div className="delete-modal-backdrop" role="presentation">
+            <section className="delete-modal" role="dialog" aria-modal="true" aria-labelledby="permanent-delete-title">
+              <p className="eyebrow">DELETE FOREVER</p>
+              <h2 id="permanent-delete-title">Permanently remove this file?</h2>
+              <p className="delete-modal-file">{pendingPermanentDelete.originalName}</p>
+              <p className="delete-modal-help">This permanently deletes the file from storage and removes its metadata. You cannot restore it later.</p>
+              <div className="delete-modal-actions">
+                <button className="modal-cancel" onClick={() => setPendingPermanentDelete(null)}>Keep in Trash</button>
+                <button className="modal-delete" onClick={confirmPermanentDelete}>Delete forever</button>
               </div>
             </section>
           </div>

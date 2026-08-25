@@ -4,7 +4,7 @@ Recommended setup:
 
 - **MongoDB Atlas** for the database
 - **Render Web Service** for the Express backend
-- **Vercel** for the React/Vite frontend
+- **Render Static Site** for the React/Vite frontend
 
 ## 1. Prepare MongoDB Atlas
 
@@ -34,7 +34,7 @@ Add these environment variables in Render:
 MONGODB_URI=mongodb+srv://USER:PASSWORD@cluster.mongodb.net/secure-file-storage?retryWrites=true&w=majority
 JWT_SECRET=<long-random-secret>
 JWT_EXPIRES_IN=1d
-CLIENT_URL=https://your-frontend.vercel.app
+CLIENT_URL=https://your-frontend.onrender.com
 ```
 
 Render provides a backend URL such as:
@@ -55,9 +55,9 @@ Expected response:
 {"success":true,"message":"API is running"}
 ```
 
-## 3. Deploy the frontend on Vercel
+## 3. Deploy the frontend on Render
 
-Import the same repository as a Vercel project.
+Create a **Static Site** from the same repository.
 
 | Setting | Value |
 | --- | --- |
@@ -67,7 +67,7 @@ Import the same repository as a Vercel project.
 | Install Command | `npm install` |
 |
 
-Add this environment variable in Vercel:
+Add this environment variable in the Render Static Site environment settings:
 
 ```text
 VITE_API_URL=https://secure-file-storage-api.onrender.com/api
@@ -75,7 +75,7 @@ VITE_API_URL=https://secure-file-storage-api.onrender.com/api
 
 Replace the example domain with the actual Render backend URL, then redeploy the frontend.
 
-Update the Render `CLIENT_URL` value to the final Vercel URL if it changes.
+Update the backend Render `CLIENT_URL` value to the final frontend Render URL if it changes.
 
 ## 4. File storage warning
 
@@ -97,7 +97,7 @@ For a temporary demo, use a host with a persistent disk and mount it at the uplo
 
 ## 6. Interview deployment explanation
 
-> I deploy the React frontend and Express API separately. The frontend receives the backend API URL through `VITE_API_URL`, while the backend receives the frontend origin through `CLIENT_URL` for CORS. MongoDB Atlas stores users and file metadata. In the current demo, Multer writes file bytes to local disk, but for production I would replace that adapter with durable object storage such as S3 or R2 because cloud instance disks may be ephemeral.
+> I deploy the React frontend and Express API as two separate Render services. The frontend is a Render Static Site and receives the backend API URL through `VITE_API_URL`. The backend is a Render Web Service and receives the frontend origin through `CLIENT_URL` for CORS. MongoDB Atlas stores users and file metadata. In the current demo, Multer writes file bytes to local disk, but for production I would replace that adapter with durable object storage such as S3 or R2 because cloud instance disks may be ephemeral.
 
 ## 7. Current implementation status
 

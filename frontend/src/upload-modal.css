@@ -149,6 +149,62 @@
   color: #315fca;
 }
 
+.sidebar-label {
+  margin: 30px 10px 8px;
+  color: #91a09b;
+  font: 600 10px Consolas, monospace;
+  letter-spacing: 1.5px;
+}
+
+.sidebar-folders {
+  overflow: auto;
+  max-height: 260px;
+  margin-top: 4px;
+}
+
+.sidebar-folders button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: #718184;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.sidebar-folders button span {
+  color: #698d78;
+  font-size: 15px;
+}
+
+.sidebar-folders button.active {
+  background: #edf5ed;
+  color: #28736a;
+  font-weight: 700;
+}
+
+.sidebar-folders button:hover {
+  color: #28736a;
+}
+
+.sidebar-folders .new-folder-button {
+  margin-bottom: 8px;
+  border: 1px dashed #afd0bd;
+  color: #28736a;
+}
+
+.sidebar-folders .new-folder-button span {
+  font-size: 17px;
+  font-weight: 700;
+}
+
 .storage-summary-label {
   display: flex;
   justify-content: space-between;
@@ -612,6 +668,18 @@ button:focus-visible,
 
 .edit-modal-field input {
   width: 100%;
+}
+
+.edit-modal-field select {
+  width: 100%;
+  border: 1px solid #c8d1ca;
+  background: #fbfaf7;
+  color: #183337;
+  padding: 11px 12px;
+}
+
+.edit-modal-field select + input {
+  margin-top: 8px;
 }
 
 .edit-modal-actions {

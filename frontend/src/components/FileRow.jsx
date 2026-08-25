@@ -41,7 +41,7 @@ export default function FileRow({ file, isAdmin, onVisibilityChange, onRename, o
 
       <div className="file-access">
         <span className={`access-status ${isShared ? 'shared' : ''}`}>
-          {isShared ? 'Anyone with link' : 'Only me'}
+          {isShared ? 'Public' : 'Private'}
         </span>
         <button
           className={`visibility ${isShared ? 'shared' : ''}`}

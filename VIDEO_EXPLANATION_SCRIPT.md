@@ -4,6 +4,23 @@
 
 Aim for 5 to 7 minutes. Keep the browser and code editor visible, and show the application working before explaining implementation details.
 
+## Walkthrough order
+
+Use this order in the recording:
+
+1. Show the dashboard and explain the product in one sentence.
+2. Register or log in and explain JWT authentication.
+3. Upload one private file into an existing folder.
+4. Upload a second file into the same folder and show the progress bar.
+5. Search by filename and filter by folder.
+6. Preview and download the file.
+7. Make the file public, copy the link, and open it in an incognito window.
+8. Rename and move the file.
+9. Move it to Trash, restore it, and explain permanent deletion.
+10. Show the architecture diagram and deployment setup.
+
+Keep the demo focused on one or two small files so the workflow is easy to follow.
+
 ## 0. Opening: 20 seconds
 
 **Show:** The dashboard home screen.
@@ -18,7 +35,7 @@ Aim for 5 to 7 minutes. Keep the browser and code editor visible, and show the a
 
 **Say:**
 
-> The application has three main parts. The frontend is built with React and Vite. The backend is an Express REST API. MongoDB stores users and file metadata, while the actual file bytes are stored in the backend uploads directory. The frontend communicates with the API using Axios.
+> The application has three main parts. The frontend is built with React and Vite. The backend is an Express REST API with Helmet security headers and authentication rate limiting. MongoDB stores users and file metadata, while the actual file bytes are stored in the backend uploads directory. The frontend communicates with the API using Axios.
 
 ```text
 React/Vite frontend
@@ -47,6 +64,8 @@ metadata   file bytes
 - `backend/src/services/auth.service.js`
 - `backend/src/utils/generateToken.js`
 - `frontend/src/context/AuthContext.jsx`
+
+**Also mention:** The backend includes `POST /api/auth/change-password`, which verifies the current password before replacing its bcrypt hash.
 
 ## 3. Authentication and authorization: 45 seconds
 
@@ -94,13 +113,13 @@ metadata   file bytes
 
 **Say:**
 
-> The dashboard provides client-side search by file name and folder name. It also filters by folder and access level. The API first returns only files the current user is allowed to see, and the frontend applies these display filters to that authorized result set.
+> The dashboard provides client-side search by file name and folder name. It also filters by folder and access level from the left sidebar. The API first returns only files the current user is allowed to see, and the frontend applies these display filters to that authorized result set. The sidebar also shows storage used against the 5 GB per-user quota.
 
 **Demonstrate:**
 
 - Search for part of a filename.
-- Select a folder.
-- Select `Only me` or `Anyone with link` using the access tabs.
+- Select a folder from the folder filter.
+- Use the sidebar to switch between `My files`, `Shared`, and `Only me`.
 
 ## 6. Preview and download: 35 seconds
 
@@ -131,13 +150,15 @@ metadata   file bytes
 
 ## 8. Delete and admin role: 40 seconds
 
-**Show:** Delete modal, then admin view if available.
+**Show:** Rename and Move modals, then the Trash view and admin view if available.
 
 **Say:**
 
-> Delete also uses a custom confirmation modal so the user clearly understands the action. The backend first checks ownership or admin permission, removes the physical file, and then removes the MongoDB metadata.
+> Rename and Move use custom modals and send updates through the authorized file endpoint. Delete also uses a custom confirmation modal. The first delete is a soft delete: the backend marks the file as trashed, removes its public access, and hides it from the normal list. From Trash, the user can restore the file or permanently delete its bytes and metadata.
 >
 > Administrators can view all files and access the user list. Regular users can only see and manage their own files. This is role-based access control enforced on the server.
+
+**Demonstrate:** Rename a file, move it to another folder, open Trash, restore it, and show the `Delete forever` action.
 
 ## 9. Deployment and closing: 35 seconds
 
@@ -145,9 +166,51 @@ metadata   file bytes
 
 **Say:**
 
-> For deployment, I use MongoDB Atlas for the database, Render for the Express backend, and Vercel for the React frontend. The frontend receives the backend URL through `VITE_API_URL`, and the backend receives the frontend origin through `CLIENT_URL` for CORS.
+> For deployment, I use MongoDB Atlas for the database and Render for both application services. The Express backend runs as a Render Web Service, and the React frontend runs as a Render Static Site. The frontend receives the backend URL through `VITE_API_URL`, and the backend receives the frontend origin through `CLIENT_URL` for CORS.
 >
 > The current demo stores files on local disk. For production, I would replace that storage adapter with durable object storage such as Amazon S3, Cloudflare R2, or Supabase Storage, because cloud instance disks can be ephemeral.
+
+## 10. Current implementation status
+
+**Say:**
+
+> The implemented foundation includes authentication, JWT authorization, admin role checks, rate limiting, security headers, file validation, folder organization, search and filters, previews, public links, a 5 GB storage quota, rename and move, and a Trash workflow. Future production work would include refresh tokens, password reset email delivery, email verification, magic-byte validation, malware scanning, durable object storage, audit logs, notifications, backups, and automated tests.
+
+## Reviewer test checklist
+
+Ask reviewers to try these scenarios:
+
+- Register with a valid password, log out, and log in again.
+- Try to register the same email twice and confirm the duplicate is rejected.
+- Open a protected API endpoint without a token and confirm it returns `401`.
+- Upload an allowed file and an unsupported file type.
+- Upload a file larger than 110 MB or exceed the 5 GB account quota.
+- Choose an existing folder and confirm multiple files appear in it.
+- Search by filename and folder, then use the sidebar access filters.
+- Preview an image or PDF and download it with its original filename.
+- Make a file public, copy the link, and open it without logging in.
+- Make the file private again and confirm the old public link stops working.
+- Rename and move a file, then refresh the page and confirm the changes persist.
+- Move a file to Trash, restore it, and permanently delete it.
+- Confirm one user cannot manage another user’s private file.
+- Confirm only an admin can access the user list.
+
+## Key decisions to explain
+
+- **Metadata and bytes are separate:** MongoDB stores searchable metadata; the local uploads directory stores file bytes.
+- **JWT plus database lookup:** the JWT identifies the user, while the backend reloads the current user and role before authorization.
+- **Owner-or-admin permissions:** the backend enforces ownership for file mutations; frontend controls are not treated as security.
+- **Random storage names:** UUID filenames prevent collisions and avoid using user-provided names as filesystem paths.
+- **Public share tokens:** public links use random tokens and require `isPublic: true`; changing a file back to private revokes access.
+- **Soft delete first:** normal delete moves a file to Trash, allowing restore; permanent deletion removes both bytes and metadata.
+- **Quota enforcement on the server:** the backend calculates stored file sizes and rejects uploads that would exceed 5 GB.
+- **Render deployment:** the frontend is a Render Static Site and the backend is a Render Web Service, with URLs connected through environment variables.
+
+## Closing summary
+
+End the video with:
+
+> The main flow is authenticated upload, validated storage, authorized file access, and controlled sharing. The main design decisions are separating metadata from file bytes, enforcing permissions on the backend, using random storage names and share tokens, and providing Trash recovery before permanent deletion. Reviewers can test the system through the normal user workflow, protected endpoints, public links, quota handling, and admin-only operations.
 
 ## Common interview questions
 

@@ -62,6 +62,16 @@ export function validateUploadName(filename) {
   }
 }
 
+export function validateFolderName(folder) {
+  if (typeof folder !== 'string' || !folder.trim() || folder.length > 60) {
+    throw createUploadError('Folder name must be between 1 and 60 characters');
+  }
+
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9 _.()-]*$/.test(folder) || folder.includes('..')) {
+    throw createUploadError('Folder name contains unsupported characters');
+  }
+}
+
 function createUploadError(message, statusCode = 422) {
   const error = new Error(message);
   error.statusCode = statusCode;
