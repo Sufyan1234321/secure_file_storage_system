@@ -15,6 +15,9 @@ app.get('/api/health', (req, res) => res.json({ success: true, message: 'API is 
 app.use('/api/auth', authRoutes);
 app.get('/api/share/:shareToken', publicDownload);
 app.use('/api/files', fileRoutes);
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
 app.use(notFound);
 app.use(errorHandler);
 
