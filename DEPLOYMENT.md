@@ -98,3 +98,19 @@ For a temporary demo, use a host with a persistent disk and mount it at the uplo
 ## 6. Interview deployment explanation
 
 > I deploy the React frontend and Express API separately. The frontend receives the backend API URL through `VITE_API_URL`, while the backend receives the frontend origin through `CLIENT_URL` for CORS. MongoDB Atlas stores users and file metadata. In the current demo, Multer writes file bytes to local disk, but for production I would replace that adapter with durable object storage such as S3 or R2 because cloud instance disks may be ephemeral.
+
+## 7. Current implementation status
+
+The first production foundation phase now includes:
+
+- Helmet security headers
+- Authentication rate limiting
+- Authenticated password changes
+- File rename and move through `PATCH /api/files/:id`
+- Soft-delete trash through `DELETE /api/files/:id`
+- Trash listing through `GET /api/files/trash`
+- Restore through `PATCH /api/files/:id/restore`
+- Permanent deletion through `DELETE /api/files/:id/permanent`
+- Normal file listings exclude trashed files
+
+The next phases still require implementation: refresh tokens, password reset email delivery, email verification, multi-file upload, nested folder records, private user-to-user sharing, expiring links, audit logs, malware scanning, durable object storage, backups, and automated tests.

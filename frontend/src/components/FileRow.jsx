@@ -19,7 +19,7 @@ function FileIcon({ type }) {
   );
 }
 
-export default function FileRow({ file, isAdmin, onVisibilityChange, onShare, onPreview, onDownload, onDelete }) {
+export default function FileRow({ file, isAdmin, onVisibilityChange, onRename, onMove, onShare, onPreview, onDownload, onDelete }) {
   const isShared = file.isPublic;
   const ownerName = file.owner?.name || 'Unknown';
   const fileDate = new Date(file.createdAt).toLocaleDateString();
@@ -56,6 +56,8 @@ export default function FileRow({ file, isAdmin, onVisibilityChange, onShare, on
           Copy link
         </button>
       )}
+      <button className="visibility" onClick={() => onRename(file)}>Rename</button>
+      <button className="visibility" onClick={() => onMove(file)}>Move</button>
       <button className="visibility" onClick={() => onPreview(file)}>
         Preview
       </button>

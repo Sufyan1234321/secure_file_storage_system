@@ -28,6 +28,25 @@ export async function loginUser({ email, password }) {
   return createAuthResponse(user);
 }
 
+export async function changeUserPassword(userId, currentPassword, newPassword) {
+  const user = await User.findById(userId).select('+password');
+
+  if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+    const error = new Error('Current password is incorrect');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  if (currentPassword === newPassword) {
+    const error = new Error('New password must be different');
+    error.statusCode = 422;
+    throw error;
+  }
+
+  user.password = await bcrypt.hash(newPassword, 12);
+  await user.save();
+}
+
 function createAuthResponse(user) {
   const userData = {
     id: user._id,

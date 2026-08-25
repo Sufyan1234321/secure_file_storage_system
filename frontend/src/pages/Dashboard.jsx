@@ -5,14 +5,24 @@ import DashboardHeader from '../components/DashboardHeader';
 import EmptyState from '../components/EmptyState';
 import FileRow from '../components/FileRow';
 
+const storageLimit = 5 * 1024 * 1024 * 1024;
+
+function formatStorage(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(0, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [files, setFiles] = useState([]);
+  const [trashFiles, setTrashFiles] = useState([]);
   const [users, setUsers] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [pendingUpload, setPendingUpload] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [pendingEdit, setPendingEdit] = useState(null);
   const [preview, setPreview] = useState(null);
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState('all');
@@ -29,11 +39,24 @@ export default function Dashboard() {
     }
   }
 
+  async function loadTrash() {
+    const response = await api.get('/files/trash');
+    setTrashFiles(response.data.data.files);
+  }
+
   useEffect(() => {
     loadFiles().catch((error) => {
       setNotice(error.response?.data?.message || 'Could not load files');
     });
   }, [user.role]);
+
+  useEffect(() => {
+    if (filter === 'trash') {
+      loadTrash().catch((error) => {
+        setNotice(error.response?.data?.message || 'Could not load trash');
+      });
+    }
+  }, [filter]);
 
   function chooseUpload(event) {
     const file = event.target.files[0];
@@ -96,6 +119,45 @@ export default function Dashboard() {
     } catch (error) {
       setNotice(error.response?.data?.message || 'Could not update file');
     }
+  }
+
+  async function updateFile(file, updates) {
+    try {
+      await api.patch(`/files/${file._id}`, updates);
+      await loadFiles();
+      setNotice('File updated');
+    } catch (error) {
+      setNotice(error.response?.data?.message || 'Could not update file');
+    }
+  }
+
+  function renameFile(file) {
+    setPendingEdit({ type: 'rename', file, value: file.originalName });
+  }
+
+  function moveFile(file) {
+    setPendingEdit({ type: 'move', file, value: file.folder || 'General' });
+  }
+
+  async function saveEdit() {
+    if (!pendingEdit || !pendingEdit.value.trim()) {
+      return;
+    }
+
+    const updates = pendingEdit.type === 'rename'
+      ? { originalName: pendingEdit.value.trim() }
+      : { folder: pendingEdit.value.trim() };
+    const unchanged = pendingEdit.type === 'rename'
+      ? updates.originalName === pendingEdit.file.originalName
+      : updates.folder === (pendingEdit.file.folder || 'General');
+
+    if (unchanged) {
+      setPendingEdit(null);
+      return;
+    }
+
+    await updateFile(pendingEdit.file, updates);
+    setPendingEdit(null);
   }
 
   async function shareFile(file) {
@@ -172,6 +234,28 @@ export default function Dashboard() {
     }
   }
 
+  async function restoreFile(file) {
+    try {
+      await api.patch(`/files/${file._id}/restore`);
+      await Promise.all([loadFiles(), loadTrash()]);
+      setNotice('File restored');
+    } catch (error) {
+      setNotice(error.response?.data?.message || 'Could not restore file');
+    }
+  }
+
+  async function permanentlyDeleteFile(file) {
+    if (!window.confirm(`Permanently delete ${file.originalName}? This cannot be undone.`)) return;
+
+    try {
+      await api.delete(`/files/${file._id}/permanent`);
+      setTrashFiles((current) => current.filter((item) => item._id !== file._id));
+      setNotice('File permanently deleted');
+    } catch (error) {
+      setNotice(error.response?.data?.message || 'Could not permanently delete file');
+    }
+  }
+
   function getVisibleFiles() {
     const normalizedSearch = search.trim().toLowerCase();
 
@@ -189,13 +273,42 @@ export default function Dashboard() {
   }
 
   const folders = [...new Set(['General', ...files.map((file) => file.folder || 'General')])].sort();
-  const visibleFiles = getVisibleFiles();
+  const usedStorage = files.reduce((total, file) => total + (file.size || 0), 0);
+  const storagePercent = Math.min(100, (usedStorage / storageLimit) * 100);
+  const visibleFiles = filter === 'trash' ? trashFiles : getVisibleFiles();
 
   return (
     <main className="dashboard">
       <DashboardHeader user={user} onLogout={logout} />
 
-      <section className="dash-inner">
+      <div className="dashboard-layout">
+        <aside className="dashboard-sidebar" aria-label="File navigation">
+          <nav className="sidebar-nav">
+            <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
+              <span aria-hidden="true">▣</span> My files
+            </button>
+            <button className={filter === 'public' ? 'active' : ''} onClick={() => setFilter('public')}>
+              <span aria-hidden="true">⌯</span> Shared
+            </button>
+            <button className={filter === 'private' ? 'active' : ''} onClick={() => setFilter('private')}>
+              <span aria-hidden="true">◌</span> Only me
+            </button>
+            <button className={filter === 'trash' ? 'active' : ''} onClick={() => setFilter('trash')}>
+              <span aria-hidden="true">⌫</span> Trash
+            </button>
+          </nav>
+          <section className="storage-summary" aria-label="Storage usage">
+            <div className="storage-summary-label">
+              <strong>{formatStorage(usedStorage)} used</strong>
+              <span>of {formatStorage(storageLimit)}</span>
+            </div>
+            <div className="storage-summary-track" role="progressbar" aria-valuenow={Math.round(storagePercent)} aria-valuemin="0" aria-valuemax="100" aria-label="Storage used">
+              <div className="storage-summary-bar" style={{ width: `${storagePercent}%` }} />
+            </div>
+          </section>
+        </aside>
+
+        <section className="dash-inner">
         <div className="welcome">
           <div>
             <p className="eyebrow">
@@ -277,33 +390,35 @@ export default function Dashboard() {
               </select>
             </label>
           </div>
-          <div className="tabs">
-            <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
-              All files <b>{files.length}</b>
-            </button>
-            <button className={filter === 'private' ? 'active' : ''} onClick={() => setFilter('private')}>
-              Private
-            </button>
-            <button className={filter === 'public' ? 'active' : ''} onClick={() => setFilter('public')}>
-              Shared
-            </button>
-          </div>
           <span className="storage-note">{visibleFiles.length} result{visibleFiles.length === 1 ? '' : 's'}</span>
         </div>
 
         {visibleFiles.length > 0 ? (
           <div className="file-list">
             {visibleFiles.map((file) => (
-              <FileRow
-                key={file._id}
-                file={file}
-                isAdmin={user.role === 'admin'}
-                onVisibilityChange={changeVisibility}
-                onShare={shareFile}
-                onPreview={previewFile}
-                onDownload={downloadFile}
-                onDelete={requestDelete}
-              />
+              filter === 'trash' ? (
+                <article className="file-row trash-row" key={file._id}>
+                  <div className="file-info">
+                    <strong>{file.originalName}</strong>
+                    <span>{file.folder || 'General'} · Deleted {new Date(file.deletedAt).toLocaleDateString()}</span>
+                  </div>
+                  <button className="visibility shared" onClick={() => restoreFile(file)}>Restore</button>
+                  <button className="visibility danger-button" onClick={() => permanentlyDeleteFile(file)}>Delete forever</button>
+                </article>
+              ) : (
+                <FileRow
+                  key={file._id}
+                  file={file}
+                  isAdmin={user.role === 'admin'}
+                  onVisibilityChange={changeVisibility}
+                  onRename={renameFile}
+                  onMove={moveFile}
+                  onShare={shareFile}
+                  onPreview={previewFile}
+                  onDownload={downloadFile}
+                  onDelete={requestDelete}
+                />
+              )
             ))}
           </div>
         ) : (
@@ -370,7 +485,32 @@ export default function Dashboard() {
             </section>
           </div>
         )}
-      </section>
+
+        {pendingEdit && (
+          <div className="edit-modal-backdrop" role="presentation">
+            <section className="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+              <p className="eyebrow">{pendingEdit.type === 'rename' ? 'RENAME FILE' : 'MOVE FILE'}</p>
+              <h2 id="edit-title">{pendingEdit.type === 'rename' ? 'Choose a new name' : 'Choose a folder'}</h2>
+              <p className="edit-modal-file">{pendingEdit.file.originalName}</p>
+              <label className="edit-modal-field">
+                {pendingEdit.type === 'rename' ? 'File name' : 'Folder name'}
+                <input
+                  value={pendingEdit.value}
+                  onChange={(event) => setPendingEdit((current) => current && { ...current, value: event.target.value })}
+                  maxLength={pendingEdit.type === 'rename' ? 120 : 60}
+                  autoFocus
+                  onKeyDown={(event) => event.key === 'Enter' && saveEdit()}
+                />
+              </label>
+              <div className="edit-modal-actions">
+                <button className="modal-cancel" onClick={() => setPendingEdit(null)}>Cancel</button>
+                <button className="modal-public" onClick={saveEdit}>Save changes</button>
+              </div>
+            </section>
+          </div>
+        )}
+        </section>
+      </div>
     </main>
   );
 }

@@ -5,6 +5,8 @@ import { getFilePath, removeStoredFile } from '../services/file.service.js';
 import { generateShareToken } from '../utils/generateToken.js';
 import { sendSuccess } from '../utils/response.js';
 
+const maxUserStorage = 5 * 1024 * 1024 * 1024;
+
 function userCanManageFile(file, user) {
   const isAdmin = user.role === 'admin';
   const isOwner = file.owner._id.toString() === user._id.toString();
@@ -22,6 +24,19 @@ export async function requestUpload(req, res) {
   const folder = typeof req.body.folder === 'string' && req.body.folder.trim()
     ? req.body.folder.trim().slice(0, 60)
     : 'General';
+  const usedStorage = await File.aggregate([
+    { $match: { owner: req.user._id } },
+    { $group: { _id: null, total: { $sum: '$size' } } }
+  ]);
+  const currentUsage = usedStorage[0]?.total || 0;
+
+  if (currentUsage + req.file.size > maxUserStorage) {
+    await removeStoredFile(req.file.filename).catch(() => {});
+    return res.status(413).json({
+      success: false,
+      message: 'This upload would exceed your 5 GB storage limit'
+    });
+  }
 
   const file = await File.create({
     originalName: req.file.originalname,
@@ -39,8 +54,8 @@ export async function requestUpload(req, res) {
 
 export async function listFiles(req, res) {
   const filter = req.user.role === 'admin'
-    ? {}
-    : { owner: req.user._id };
+    ? { isTrashed: false }
+    : { owner: req.user._id, isTrashed: false };
   const files = await File.find(filter)
     .select('+shareToken')
     .populate('owner', 'name email')
@@ -61,14 +76,28 @@ export async function updateFile(req, res) {
     return res.status(403).json({ success: false, message: 'You do not own this file' });
   }
 
-  if (typeof req.body.isPublic !== 'boolean') {
+  if (req.body.isPublic !== undefined && typeof req.body.isPublic !== 'boolean') {
     return res.status(422).json({ success: false, message: 'isPublic must be a boolean' });
   }
 
-  file.isPublic = req.body.isPublic;
-  file.shareToken = file.isPublic
-    ? file.shareToken || generateShareToken()
-    : undefined;
+  if (req.body.isPublic !== undefined) {
+    file.isPublic = req.body.isPublic;
+    file.shareToken = file.isPublic
+      ? file.shareToken || generateShareToken()
+      : undefined;
+  }
+
+  if (req.body.originalName !== undefined) {
+    validateUploadName(req.body.originalName);
+    file.originalName = req.body.originalName;
+  }
+
+  if (req.body.folder !== undefined) {
+    if (typeof req.body.folder !== 'string' || !req.body.folder.trim()) {
+      return res.status(422).json({ success: false, message: 'Folder name is required' });
+    }
+    file.folder = req.body.folder.trim().slice(0, 60);
+  }
   await file.save();
 
   return sendSuccess(res, { file });
@@ -86,10 +115,54 @@ export async function deleteFile(req, res) {
     return res.status(403).json({ success: false, message: 'You do not own this file' });
   }
 
+  file.isTrashed = true;
+  file.deletedAt = new Date();
+  file.isPublic = false;
+  file.shareToken = undefined;
+  await file.save();
+
+  return sendSuccess(res, { message: 'File moved to trash' });
+}
+
+export async function listTrash(req, res) {
+  const filter = req.user.role === 'admin'
+    ? { isTrashed: true }
+    : { owner: req.user._id, isTrashed: true };
+  const files = await File.find(filter)
+    .select('+shareToken')
+    .populate('owner', 'name email')
+    .sort({ deletedAt: -1 });
+
+  return sendSuccess(res, { files });
+}
+
+export async function restoreFile(req, res) {
+  const file = await File.findOne({ _id: req.params.id, isTrashed: true })
+    .populate('owner', 'name email');
+
+  if (!file) return res.status(404).json({ success: false, message: 'Trashed file not found' });
+  if (!userCanManageFile(file, req.user)) {
+    return res.status(403).json({ success: false, message: 'You do not own this file' });
+  }
+
+  file.isTrashed = false;
+  file.deletedAt = null;
+  await file.save();
+  return sendSuccess(res, { file });
+}
+
+export async function permanentlyDeleteFile(req, res) {
+  const file = await File.findOne({ _id: req.params.id, isTrashed: true })
+    .populate('owner', 'name email');
+
+  if (!file) return res.status(404).json({ success: false, message: 'Trashed file not found' });
+  if (!userCanManageFile(file, req.user)) {
+    return res.status(403).json({ success: false, message: 'You do not own this file' });
+  }
+
   await removeStoredFile(file.storageName);
   await file.deleteOne();
-
-  return sendSuccess(res, { message: 'File deleted' });
+  return sendSuccess(res, { message: 'File permanently deleted' });
 }
 
 export async function downloadFile(req, res) {
@@ -98,6 +171,10 @@ export async function downloadFile(req, res) {
 
   if (!file) {
     return res.status(404).json({ success: false, message: 'File not found' });
+  }
+
+  if (file.isTrashed) {
+    return res.status(404).json({ success: false, message: 'File is in the trash' });
   }
 
   const isAllowed = file.isPublic || userCanManageFile(file, req.user);
