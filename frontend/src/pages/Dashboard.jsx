@@ -10,6 +10,10 @@ export default function Dashboard() {
   const [files, setFiles] = useState([]);
   const [users, setUsers] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [pendingUpload, setPendingUpload] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState('all');
 
@@ -29,28 +33,48 @@ export default function Dashboard() {
     });
   }, [user.role]);
 
-  async function uploadFile(event) {
+  function chooseUpload(event) {
     const file = event.target.files[0];
 
     if (!file) {
       return;
     }
 
+    setPendingUpload(file);
+    event.target.value = '';
+  }
+
+  async function uploadFile(isPublic) {
+    const file = pendingUpload;
+
+    if (!file) {
+      return;
+    }
+
     setIsUploading(true);
+    setUploadProgress(0);
     setNotice('');
 
     try {
       const formData = new FormData();
       formData.append('file', file);
-      await api.post('/files/upload', formData);
+      formData.append('isPublic', String(isPublic));
+      await api.post('/files/upload', formData, {
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            setUploadProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
+          }
+        }
+      });
 
       await loadFiles();
-      setNotice('File uploaded');
+      setNotice(isPublic ? 'File uploaded and shared' : 'File uploaded privately');
     } catch (error) {
       setNotice(error.response?.data?.message || 'Upload failed');
     } finally {
       setIsUploading(false);
-      event.target.value = '';
+      setUploadProgress(0);
+      setPendingUpload(null);
     }
   }
 
@@ -61,6 +85,45 @@ export default function Dashboard() {
     } catch (error) {
       setNotice(error.response?.data?.message || 'Could not update file');
     }
+  }
+
+  async function shareFile(file) {
+    const apiUrl = api.defaults.baseURL.replace(/\/$/, '');
+    const shareUrl = `${apiUrl}/share/${file.shareToken}`;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setNotice('Share link copied');
+    } catch {
+      setNotice('Could not copy share link');
+    }
+  }
+
+  async function previewFile(file) {
+    const previewable = file.mimeType === 'application/pdf'
+      || file.mimeType.startsWith('image/')
+      || file.mimeType === 'text/plain'
+      || file.mimeType === 'text/csv';
+
+    if (!previewable) {
+      setNotice('Preview is not available for this file type. Use Download instead.');
+      return;
+    }
+
+    try {
+      const response = await api.get(`/files/${file._id}/download`, { responseType: 'blob' });
+      setPreview({ file, url: URL.createObjectURL(response.data) });
+    } catch (error) {
+      setNotice(error.response?.data?.message || 'Could not preview file');
+    }
+  }
+
+  function closePreview() {
+    if (preview) {
+      URL.revokeObjectURL(preview.url);
+    }
+
+    setPreview(null);
   }
 
   async function downloadFile(file) {
@@ -79,16 +142,20 @@ export default function Dashboard() {
     }
   }
 
-  async function deleteFile(file) {
-    const shouldDelete = window.confirm(`Delete ${file.originalName}?`);
+  function requestDelete(file) {
+    setPendingDelete(file);
+  }
 
-    if (!shouldDelete) {
+  async function deleteFile() {
+    if (!pendingDelete) {
       return;
     }
 
     try {
-      await api.delete(`/files/${file._id}`);
-      setFiles(files.filter((item) => item._id !== file._id));
+      await api.delete(`/files/${pendingDelete._id}`);
+      setFiles(files.filter((item) => item._id !== pendingDelete._id));
+      setNotice('File deleted');
+      setPendingDelete(null);
     } catch (error) {
       setNotice(error.response?.data?.message || 'Could not delete file');
     }
@@ -126,7 +193,7 @@ export default function Dashboard() {
             <input
               type="file"
               accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp"
-              onChange={uploadFile}
+              onChange={chooseUpload}
               disabled={isUploading}
             />
             {isUploading ? 'Uploading...' : '+ Add a file'}
@@ -134,6 +201,41 @@ export default function Dashboard() {
         </div>
 
         {notice && <div className="notice">{notice}</div>}
+
+        {pendingUpload && (
+          <div className="upload-modal-backdrop" role="presentation">
+            <section className="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-choice-title">
+              <p className="eyebrow">UPLOAD SETTINGS</p>
+              <h2 id="upload-choice-title">Who should access this file?</h2>
+              <p className="upload-modal-file">{pendingUpload.name}</p>
+              <p className="upload-modal-help">Choose public to create a shareable link. Choose private to keep access limited to you.</p>
+              <div className="upload-modal-actions">
+                <button className="modal-private" onClick={() => uploadFile(false)} disabled={isUploading}>
+                  Keep private
+                </button>
+                <button className="modal-public" onClick={() => uploadFile(true)} disabled={isUploading}>
+                  {isUploading ? 'Uploading...' : 'Make public'}
+                </button>
+              </div>
+              {isUploading && (
+                <div className="upload-progress" aria-live="polite">
+                  <div className="upload-progress-label">
+                    <span>Uploading file</span>
+                    <strong>{uploadProgress}%</strong>
+                  </div>
+                  <div className="upload-progress-track" role="progressbar" aria-valuenow={uploadProgress} aria-valuemin="0" aria-valuemax="100">
+                    <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                </div>
+              )}
+              {!isUploading && (
+                <button className="modal-cancel" onClick={() => setPendingUpload(null)}>
+                  Cancel upload
+                </button>
+              )}
+            </section>
+          </div>
+        )}
 
         <div className="toolbar">
           <div className="tabs">
@@ -158,8 +260,10 @@ export default function Dashboard() {
                 file={file}
                 isAdmin={user.role === 'admin'}
                 onVisibilityChange={changeVisibility}
+                onShare={shareFile}
+                onPreview={previewFile}
                 onDownload={downloadFile}
-                onDelete={deleteFile}
+                onDelete={requestDelete}
               />
             ))}
           </div>
@@ -182,6 +286,50 @@ export default function Dashboard() {
               ))}
             </div>
           </section>
+        )}
+
+        {preview && (
+          <div className="preview-modal-backdrop" role="presentation" onClick={closePreview}>
+            <section className="preview-modal" role="dialog" aria-modal="true" aria-labelledby="preview-title" onClick={(event) => event.stopPropagation()}>
+              <header className="preview-header">
+                <div>
+                  <p className="eyebrow">FILE PREVIEW</p>
+                  <h2 id="preview-title">{preview.file.originalName}</h2>
+                </div>
+                <button className="preview-close" onClick={closePreview} aria-label="Close preview">×</button>
+              </header>
+              <div className="preview-content">
+                {preview.file.mimeType.startsWith('image/') && (
+                  <img src={preview.url} alt={preview.file.originalName} />
+                )}
+                {preview.file.mimeType === 'application/pdf' && (
+                  <iframe src={preview.url} title={preview.file.originalName} />
+                )}
+                {(preview.file.mimeType === 'text/plain' || preview.file.mimeType === 'text/csv') && (
+                  <iframe src={preview.url} title={preview.file.originalName} />
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {pendingDelete && (
+          <div className="delete-modal-backdrop" role="presentation">
+            <section className="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+              <p className="eyebrow">DELETE FILE</p>
+              <h2 id="delete-title">Remove this file?</h2>
+              <p className="delete-modal-file">{pendingDelete.originalName}</p>
+              <p className="delete-modal-help">This permanently removes the file and its metadata. This action cannot be undone.</p>
+              <div className="delete-modal-actions">
+                <button className="modal-cancel" onClick={() => setPendingDelete(null)}>
+                  Cancel
+                </button>
+                <button className="modal-delete" onClick={deleteFile}>
+                  Delete file
+                </button>
+              </div>
+            </section>
+          </div>
         )}
       </section>
     </main>

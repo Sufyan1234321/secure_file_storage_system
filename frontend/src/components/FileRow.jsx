@@ -19,7 +19,7 @@ function FileIcon({ type }) {
   );
 }
 
-export default function FileRow({ file, isAdmin, onVisibilityChange, onDownload, onDelete }) {
+export default function FileRow({ file, isAdmin, onVisibilityChange, onShare, onPreview, onDownload, onDelete }) {
   const isShared = file.isPublic;
   const ownerName = file.owner?.name || 'Unknown';
   const fileDate = new Date(file.createdAt).toLocaleDateString();
@@ -39,11 +39,25 @@ export default function FileRow({ file, isAdmin, onVisibilityChange, onDownload,
         <span className="owner">{ownerName}</span>
       )}
 
-      <button
-        className={`visibility ${isShared ? 'shared' : ''}`}
-        onClick={() => onVisibilityChange(file)}
-      >
-        {isShared ? 'Shared' : 'Private'}
+      <div className="file-access">
+        <span className={`access-status ${isShared ? 'shared' : ''}`}>
+          {isShared ? 'Anyone with link' : 'Only me'}
+        </span>
+        <button
+          className={`visibility ${isShared ? 'shared' : ''}`}
+          onClick={() => onVisibilityChange(file)}
+          title={isShared ? 'Stop sharing this file' : 'Create a link to share this file'}
+        >
+          {isShared ? 'Make private' : 'Make public'}
+        </button>
+      </div>
+      {isShared && file.shareToken && (
+        <button className="visibility shared" onClick={() => onShare(file)}>
+          Copy link
+        </button>
+      )}
+      <button className="visibility" onClick={() => onPreview(file)}>
+        Preview
       </button>
       <button className="row-action" onClick={() => onDownload(file)} title="Download">↓</button>
       <button className="row-action danger" onClick={() => onDelete(file)} title="Delete">×</button>

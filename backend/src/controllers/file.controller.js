@@ -18,13 +18,16 @@ export async function requestUpload(req, res) {
   }
 
   validateUploadName(req.file.originalname);
+  const isPublic = req.body.isPublic === 'true';
 
   const file = await File.create({
     originalName: req.file.originalname,
     size: req.file.size,
     mimeType: req.file.mimetype,
     storageName: req.file.filename,
-    owner: req.user._id
+    owner: req.user._id,
+    isPublic,
+    shareToken: isPublic ? generateShareToken() : undefined
   });
 
   return sendSuccess(res, { file }, 201);

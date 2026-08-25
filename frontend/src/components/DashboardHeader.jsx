@@ -6,7 +6,7 @@ export default function DashboardHeader({ user, onLogout }) {
 
   return (
     <header className="topbar">
-      <div className="brand-mark dark">keep<span>.</span></div>
+      <div className="brand-mark dark">Secure File Storage<span>.</span></div>
 
       <div className="profile">
         <div className="avatar">{userInitial}</div>
