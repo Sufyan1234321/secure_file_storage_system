@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [trashFiles, setTrashFiles] = useState([]);
   const [users, setUsers] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [pendingUpload, setPendingUpload] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
@@ -65,20 +66,32 @@ export default function Dashboard() {
   }, [filter]);
 
   function chooseUpload(event) {
-    const file = event.target.files[0];
+    const filesToUpload = Array.from(event.target.files);
 
-    if (!file) {
+    if (!filesToUpload.length) {
       return;
     }
 
-    setPendingUpload({ file, folder: folders.includes('General') ? 'General' : folders[0] || 'General', isNewFolder: false });
+    setPendingUpload({ files: filesToUpload, folder: folders.includes('General') ? 'General' : folders[0] || 'General', isNewFolder: false });
     event.target.value = '';
   }
 
-  async function uploadFile(isPublic) {
-    const file = pendingUpload?.file;
+  function dropUpload(event) {
+    event.preventDefault();
+    setIsDragActive(false);
+    const filesToUpload = Array.from(event.dataTransfer.files);
 
-    if (!file) {
+    if (!filesToUpload.length || isUploading) {
+      return;
+    }
+
+    setPendingUpload({ files: filesToUpload, folder: folders.includes('General') ? 'General' : folders[0] || 'General', isNewFolder: false });
+  }
+
+  async function uploadFile(isPublic) {
+    const filesToUpload = pendingUpload?.files || [];
+
+    if (!filesToUpload.length) {
       return;
     }
 
@@ -87,20 +100,23 @@ export default function Dashboard() {
     setNotice('');
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('isPublic', String(isPublic));
-      formData.append('folder', pendingUpload.folder);
-      await api.post('/files/upload', formData, {
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            setUploadProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
+      for (const [index, file] of filesToUpload.entries()) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('isPublic', String(isPublic));
+        formData.append('folder', pendingUpload.folder);
+        await api.post('/files/upload', formData, {
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const fileProgress = (progressEvent.loaded * 100) / progressEvent.total;
+              setUploadProgress(Math.round(((index + fileProgress / 100) / filesToUpload.length) * 100));
+            }
           }
-        }
-      });
+        });
+      }
 
       await loadFiles();
-      setNotice(isPublic ? 'File uploaded and shared' : 'File uploaded privately');
+      setNotice(`${filesToUpload.length} file${filesToUpload.length === 1 ? '' : 's'} uploaded ${isPublic ? 'and shared' : 'privately'}`);
     } catch (error) {
       setNotice(error.response?.data?.message || 'Upload failed');
     } finally {
@@ -364,14 +380,25 @@ export default function Dashboard() {
             <p className="lead">Keep the important things close. Share only what you choose.</p>
           </div>
 
-          <label className={`upload-button ${isUploading ? 'disabled' : ''}`}>
+          <label
+            className={`upload-zone ${isDragActive ? 'drag-active' : ''} ${isUploading ? 'disabled' : ''}`}
+            onDragOver={(event) => { event.preventDefault(); setIsDragActive(true); }}
+            onDragLeave={() => setIsDragActive(false)}
+            onDrop={dropUpload}
+          >
             <input
               type="file"
-              accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp"
+              accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mov,.avi,.mkv,video/*"
+              multiple
               onChange={chooseUpload}
               disabled={isUploading}
             />
-            {isUploading ? 'Uploading...' : '+ Add a file'}
+            <span className="upload-zone-icon" aria-hidden="true">↑</span>
+            <span className="upload-zone-copy">
+              <strong>{isUploading ? 'Uploading files...' : 'Upload files'}</strong>
+              <small>{isUploading ? 'Please keep this window open' : 'Drop files here or click to browse'}</small>
+            </span>
+            <span className="upload-zone-meta">PDF · DOC · IMG · VIDEO</span>
           </label>
         </div>
 
@@ -381,9 +408,11 @@ export default function Dashboard() {
           <div className="upload-modal-backdrop" role="presentation">
             <section className="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-choice-title">
               <p className="eyebrow">UPLOAD SETTINGS</p>
-              <h2 id="upload-choice-title">Who should access this file?</h2>
-              <p className="upload-modal-file">{pendingUpload.file.name}</p>
-              <p className="upload-modal-help">Choose public to create a shareable link. Choose private to keep access limited to you.</p>
+              <h2 id="upload-choice-title">Who should access these files?</h2>
+              <div className="upload-modal-files">
+                {pendingUpload.files.map((file) => <p className="upload-modal-file" key={`${file.name}-${file.lastModified}`}>{file.name}</p>)}
+              </div>
+              <p className="upload-modal-help">Choose public to create shareable links. Choose private to keep access limited to you.</p>
               <label className="folder-input">
                 Choose a folder
                 <select value={pendingUpload.isNewFolder ? '__new__' : pendingUpload.folder} onChange={updatePendingFolder} disabled={isUploading}>

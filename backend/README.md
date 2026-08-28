@@ -5,9 +5,11 @@
 1. Copy `.env.example` to `.env` and configure MongoDB.
 2. Run `npm install`, then `npm run dev`.
 
-Uploaded files are stored in the backend `uploads` folder. MongoDB stores file metadata only. Users can manage their own files; admins can manage all files and view users. Normal deletion moves files to Trash before permanent deletion.
+Uploaded file bytes are stored in Cloudinary. MongoDB stores file metadata and the Cloudinary public ID, delivery URL, and resource type. Users can manage their own files; admins can manage all files and view users. Normal deletion moves files to Trash before permanent deletion.
 
-Uploads are limited to 110 MB per file and 5 GB per user. The API allows PDF, Word, text, CSV, JPG, PNG, GIF, and WebP files. It checks the filename, extension, and MIME type before saving the file. MIME type checks are only a quick check because request headers can be spoofed. For production, add magic-byte validation and antivirus scanning before making files public.
+Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in `.env` using the values from the Cloudinary dashboard. The server uses an in-memory Multer buffer and streams each upload directly to Cloudinary, so new uploads do not depend on local disk.
+
+Uploads are limited to 110 MB per file and 5 GB per user. The API allows PDF, Word, text, CSV, JPG, PNG, GIF, WebP, and common video files. It checks the filename, extension, and MIME type before sending the file to Cloudinary. MIME type checks are only a quick check because request headers can be spoofed. For production, add magic-byte validation and antivirus scanning before making files public.
 
 ### Endpoints
 
