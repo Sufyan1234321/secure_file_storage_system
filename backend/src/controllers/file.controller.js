@@ -1,7 +1,7 @@
 import File from '../models/file.model.js';
 import User from '../models/user.model.js';
 import { validateFolderName, validateUploadName } from '../middleware/upload.middleware.js';
-import { getFilePath, moveStoredFile, removeStoredFile } from '../services/file.service.js';
+import { moveStoredFile, removeStoredFile, sendStoredFile, uploadStoredFile } from '../services/file.service.js';
 import { generateShareToken } from '../utils/generateToken.js';
 import { sendSuccess } from '../utils/response.js';
 
@@ -32,21 +32,22 @@ export async function requestUpload(req, res) {
   const currentUsage = usedStorage[0]?.total || 0;
 
   if (currentUsage + req.file.size > maxUserStorage) {
-    await removeStoredFile(req.file.filename).catch(() => {});
     return res.status(413).json({
       success: false,
       message: 'This upload would exceed your 5 GB storage limit'
     });
   }
 
-  const storageName = await moveStoredFile(req.file.filename, req.user._id, folder);
+  const uploaded = await uploadStoredFile(req.file, req.user._id, folder);
 
   const file = await File.create({
     originalName: req.file.originalname,
     folder,
     size: req.file.size,
     mimeType: req.file.mimetype,
-    storageName,
+    storageName: uploaded.public_id,
+    storageUrl: uploaded.secure_url,
+    storageResourceType: uploaded.resource_type,
     owner: req.user._id,
     isPublic,
     shareToken: isPublic ? generateShareToken() : undefined
@@ -102,7 +103,15 @@ export async function updateFile(req, res) {
     const folder = req.body.folder.trim().slice(0, 60);
     validateFolderName(folder);
     if (folder !== file.folder) {
-      file.storageName = await moveStoredFile(file.storageName, file.owner._id, folder);
+      const moved = await moveStoredFile(
+        file.storageName,
+        file.owner._id,
+        folder,
+        file.storageResourceType,
+        file.storageUrl
+      );
+      file.storageName = moved.storageName;
+      file.storageUrl = moved.storageUrl || file.storageUrl;
     }
     file.folder = folder;
   }
@@ -168,7 +177,7 @@ export async function permanentlyDeleteFile(req, res) {
     return res.status(403).json({ success: false, message: 'You do not own this file' });
   }
 
-  await removeStoredFile(file.storageName);
+  await removeStoredFile(file.storageName, file.storageResourceType, file.storageUrl);
   await file.deleteOne();
   return sendSuccess(res, { message: 'File permanently deleted' });
 }
@@ -191,7 +200,7 @@ export async function downloadFile(req, res) {
     return res.status(403).json({ success: false, message: 'This file is private' });
   }
 
-  return res.download(getFilePath(file.storageName), file.originalName);
+  return sendStoredFile(file, res);
 }
 
 export async function publicDownload(req, res) {
@@ -204,7 +213,7 @@ export async function publicDownload(req, res) {
     return res.status(404).json({ success: false, message: 'Shared file not found' });
   }
 
-  return res.download(getFilePath(file.storageName), file.originalName);
+  return sendStoredFile(file, res);
 }
 
 export async function listUsers(req, res) {

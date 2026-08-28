@@ -1,9 +1,6 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 import multer from 'multer';
 
-export const uploadDirectory = path.join(process.cwd(), 'uploads');
 export const maxFileSize = 110 * 1024 * 1024;
 
 const allowedFileTypes = {
@@ -16,18 +13,13 @@ const allowedFileTypes = {
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
   '.gif': 'image/gif',
-  '.webp': 'image/webp'
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo',
+  '.mkv': 'video/x-matroska'
 };
-
-fs.mkdirSync(uploadDirectory, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: uploadDirectory,
-  filename: (req, file, callback) => {
-    const extension = path.extname(file.originalname).toLowerCase();
-    callback(null, `${crypto.randomUUID()}${extension}`);
-  }
-});
 
 function checkFileType(req, file, callback) {
   try {
@@ -47,7 +39,7 @@ function checkFileType(req, file, callback) {
 }
 
 export const uploadFile = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: maxFileSize },
   fileFilter: checkFileType
 }).single('file');

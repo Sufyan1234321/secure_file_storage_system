@@ -35,6 +35,77 @@
   white-space: nowrap;
 }
 
+.upload-modal-files {
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.upload-modal-files .upload-modal-file {
+  margin-bottom: 6px;
+}
+
+.upload-zone {
+  display: flex;
+  width: min(100%, 520px);
+  min-height: 104px;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px dashed #8fb8a2;
+  background: #eef6ee;
+  color: #183337;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, transform .2s ease;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-active {
+  border-color: #e9784e;
+  background: #fff1e9;
+  transform: translateY(-2px);
+}
+
+.upload-zone input {
+  display: none;
+}
+
+.upload-zone-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: #183337;
+  color: #fff;
+  font-size: 25px;
+  line-height: 1;
+}
+
+.upload-zone-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.upload-zone-copy strong {
+  font-size: 15px;
+}
+
+.upload-zone-copy small {
+  color: #718184;
+  font-size: 12px;
+}
+
+.upload-zone-meta {
+  margin-left: auto;
+  color: #698d78;
+  font: 500 9px 'DM Mono', monospace;
+  letter-spacing: .5px;
+  text-align: right;
+}
+
 .upload-modal-help {
   margin: 0;
   color: #718184;
@@ -266,6 +337,17 @@
 
 .upload-progress {
   margin-top: 22px;
+}
+
+@media(max-width:720px) {
+  .upload-zone {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .upload-zone-meta {
+    display: none;
+  }
 }
 
 .upload-progress-label {

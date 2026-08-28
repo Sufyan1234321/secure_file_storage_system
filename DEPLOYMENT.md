@@ -35,6 +35,9 @@ MONGODB_URI=mongodb+srv://USER:PASSWORD@cluster.mongodb.net/secure-file-storage?
 JWT_SECRET=<long-random-secret>
 JWT_EXPIRES_IN=1d
 CLIENT_URL=https://your-frontend.onrender.com
+CLOUDINARY_CLOUD_NAME=<cloudinary-cloud-name>
+CLOUDINARY_API_KEY=<cloudinary-api-key>
+CLOUDINARY_API_SECRET=<cloudinary-api-secret>
 ```
 
 Render provides a backend URL such as:
@@ -79,11 +82,7 @@ Update the backend Render `CLIENT_URL` value to the final frontend Render URL if
 
 ## 4. File storage warning
 
-The current backend writes uploaded bytes to `backend/uploads` using Multer. Local disk on many cloud services is ephemeral, so files can disappear after a restart or redeploy.
-
-For a serious deployment, replace the filesystem layer with object storage such as Amazon S3, Cloudflare R2, or Supabase Storage. Keep MongoDB for metadata and store the object key or URL in the `File` document.
-
-For a temporary demo, use a host with a persistent disk and mount it at the upload directory. The current code uses `process.cwd()/uploads`, so configure the service's persistent disk mount accordingly or make the upload directory configurable.
+The backend streams uploaded bytes to Cloudinary using Multer's in-memory storage. MongoDB keeps the searchable metadata plus the Cloudinary public ID, secure URL, and resource type. Set the three Cloudinary environment variables above in the Render backend service; never commit the API secret.
 
 ## 5. Production checklist
 
@@ -92,12 +91,12 @@ For a temporary demo, use a host with a persistent disk and mount it at the uplo
 - Do not commit `backend/.env`.
 - Use HTTPS URLs for both frontend and backend.
 - Restrict MongoDB network access where possible.
-- Move file bytes to durable object storage before relying on the app for real data.
+- Keep Cloudinary usage within the account's size, transformation, and bandwidth limits.
 - Test registration, login, private upload, public share, preview, download, delete, and admin access after deployment.
 
 ## 6. Interview deployment explanation
 
-> I deploy the React frontend and Express API as two separate Render services. The frontend is a Render Static Site and receives the backend API URL through `VITE_API_URL`. The backend is a Render Web Service and receives the frontend origin through `CLIENT_URL` for CORS. MongoDB Atlas stores users and file metadata. In the current demo, Multer writes file bytes to local disk, but for production I would replace that adapter with durable object storage such as S3 or R2 because cloud instance disks may be ephemeral.
+> I deploy the React frontend and Express API as two separate Render services. The frontend is a Render Static Site and receives the backend API URL through `VITE_API_URL`. The backend is a Render Web Service and receives the frontend origin through `CLIENT_URL` for CORS. MongoDB Atlas stores users and file metadata, while Cloudinary stores and delivers the file bytes independently of the web service disk.
 
 ## 7. Current implementation status
 
@@ -113,4 +112,4 @@ The first production foundation phase now includes:
 - Permanent deletion through `DELETE /api/files/:id/permanent`
 - Normal file listings exclude trashed files
 
-The next phases still require implementation: refresh tokens, password reset email delivery, email verification, multi-file upload, nested folder records, private user-to-user sharing, expiring links, audit logs, malware scanning, durable object storage, backups, and automated tests.
+The next phases still require implementation: refresh tokens, password reset email delivery, email verification, nested folder records, private user-to-user sharing, expiring links, audit logs, malware scanning, backups, and automated tests.

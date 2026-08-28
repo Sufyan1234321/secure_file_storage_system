@@ -35,7 +35,7 @@ Keep the demo focused on one or two small files so the workflow is easy to follo
 
 **Say:**
 
-> The application has three main parts. The frontend is built with React and Vite. The backend is an Express REST API with Helmet security headers and authentication rate limiting. MongoDB stores users and file metadata, while the actual file bytes are stored in the backend uploads directory. The frontend communicates with the API using Axios.
+> The application has three main parts. The frontend is built with React and Vite. The backend is an Express REST API with Helmet security headers and authentication rate limiting. MongoDB stores users and file metadata, while Cloudinary stores and delivers the actual file bytes. The frontend communicates with the API using Axios.
 
 ```text
 React/Vite frontend
@@ -85,20 +85,20 @@ metadata   file bytes
 
 ## 4. Upload and folder organization: 60 seconds
 
-**Show:** Click `Add a file`, choose a small PDF or image, and show the custom upload modal.
+**Show:** Click `Upload files`, choose one or more small files such as a PDF, image, or video, and show the custom upload modal.
 
 **Say:**
 
 > When a user selects a file, the application asks whether it should be public or private. It also lets the user select an existing folder or create a new folder. This makes it easy to upload multiple files into the same folder.
 >
-> On the backend, Multer validates the filename, extension, MIME type, and maximum size. The file is written with a random UUID filename, while MongoDB stores the original name, folder, size, MIME type, owner, and visibility information. MongoDB stores metadata only, not the file bytes.
+> On the backend, Multer validates the filename, extension, MIME type, and maximum size before streaming the file to Cloudinary. MongoDB stores the original name, folder, size, MIME type, Cloudinary public ID, delivery URL, owner, and visibility information. MongoDB stores metadata only, not the file bytes.
 
 **Demonstrate:**
 
 1. Choose `Work` from the folder dropdown.
 2. Choose `Keep private`.
-3. Upload another file into `Work`.
-4. Show both files together.
+3. Upload multiple files into `Work` in one selection.
+4. Show the files together.
 5. Show the upload progress bar.
 
 **Show in code:**
@@ -168,7 +168,7 @@ metadata   file bytes
 
 > For deployment, I use MongoDB Atlas for the database and Render for both application services. The Express backend runs as a Render Web Service, and the React frontend runs as a Render Static Site. The frontend receives the backend URL through `VITE_API_URL`, and the backend receives the frontend origin through `CLIENT_URL` for CORS.
 >
-> The current demo stores files on local disk. For production, I would replace that storage adapter with durable object storage such as Amazon S3, Cloudflare R2, or Supabase Storage, because cloud instance disks can be ephemeral.
+> Cloudinary stores the file bytes separately from the Render web service, so uploads survive application restarts and redeploys. MongoDB continues to store the searchable file metadata.
 
 ## 10. Current implementation status
 
